@@ -1,0 +1,6 @@
+NO. ,Output ,Error 
+
+the input data is : 1.00 1.00 
+the output data is : 0.99 
+accumulate error = 0.491931
+1,0.99,0.991898
