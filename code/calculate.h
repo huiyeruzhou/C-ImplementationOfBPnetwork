@@ -1,6 +1,13 @@
 #ifndef __CALCULATE_H__
 #define __CALCULATE_H__
-double MinMaxScaler(double** input, int dataSize);//特化
+typedef struct 
+{
+    double* min;
+    double* scaler;
+}REMINMAX;
+
+
+REMINMAX MinMaxScaler(double** input, int dataSize);//特化
 int ij(int i, int col_x, int j);
 void LinearCombine(double*weight, int row_weight, int column_weight,
 double*node, double* biases, double *result);

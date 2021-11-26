@@ -10,6 +10,8 @@ int main()
     printf("done\n");
     printf("training the network...\n");
     TrainNetwork(&N);
+    printf("testing the network...\n");
+    TestNetwork(&N);
     printf("done");
     return 0;
 }

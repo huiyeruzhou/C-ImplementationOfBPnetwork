@@ -6,53 +6,72 @@
 
 void TrainNetwork(BPnetwork *network)
 {
-    network->scaler = MinMaxScaler(network->Input, network->dataSize);
+    network->reMinMax = MinMaxScaler(network->input, DATASIZE + TESTSIZE);
     InitDeriv(network);
-    for(int j = 0 ; j < network->epoch; j ++)
-    for (int i = 0; i < network->dataSize; i++)
+    fprintf(network->errorFile, "rounds, error\n");
+    for (int j = 0; j < network->epoch; j++)
     {
-        InitTrain(network, i);
-        Forward(network);
-        Backward(network);
-        fprintf(network->resultFile,"NO.%d in %d rounds",i + 1, j + 1);
-        PrintResult(network);
-        if (i + 1 && !(i + 1 % BATCHSIZE))
+        for (int i = 0; i < network->dataSize; i++)
         {
-            fprintf(network->errorFile,"%d,",j * network->dataSize + i + 1);
-            PrintError(network);
-            NetworkLearn(network);
-            InitDeriv(network);
+            InitTrain(network, i);
+            Forward(network);
+            Backward(network);
+            if (!((j + 1) % PRT_RESULT))
+            {
+                fprintf(network->resultFile, "NO.%d in %d rounds", i + 1, j + 1);
+                PrintResult(network, network->resultFile);
+            }
+            if (!((i + 1) % BATCHSIZE))
+            {
+                if (!((j + 1) % PRT_ERROR))
+                {
+                    fprintf(network->errorFile, "%d,", j);
+                    PrintError(network, network->errorFile);
+                }
+                NetworkLearn(network);
+                InitDeriv(network);
+            }
         }
-        
     }
     fclose(network->resultFile);
     fclose(network->errorFile);
-
+}
+void TestNetwork(BPnetwork *network)
+{
+    InitTest(network);
+    fprintf(network->checkFile, "NO. ,Output ,Error \n");
+    for (int i = DATASIZE; i < DATASIZE + TESTSIZE; i++)
+    {
+        InitTrain(network, i);
+        Forward(network);
+        PrintResult(network, network->checkFile);
+        PrintTest(network, i - DATASIZE + 1);
+    }
+    fclose(network->checkFile);
 }
 void InitNetwork(BPnetwork *network)
 {
-    
+
     //打开文件
     errno = 0;
     network->inputFile = fopen(INPUTFILE, "r");
-    if(!network->inputFile)
+    if (!network->inputFile)
     {
         perror("Error in open inputFile");
         exit(-1);
     }
     network->resultFile = fopen(RESULTFILE, "w");
-    if(!network->resultFile)
+    if (!network->resultFile)
     {
         perror("Error in open resultFile");
         exit(-1);
     }
     network->errorFile = fopen(ERRORFILE, "w");
-    if(!network->errorFile)
+    if (!network->errorFile)
     {
         perror("Error in open errorFile");
         exit(-1);
     }
-    fprintf(network->errorFile, "error,rounds\n");
 
     //为所有数据实体赋值
     network->e = 0;
@@ -64,14 +83,13 @@ void InitNetwork(BPnetwork *network)
 
     //为所有指针分配存储空间
     //训练数据
-    network->Input = (double **)malloc(DATASIZE * sizeof(double *));
-    for (int i = 0; i < DATASIZE; i++)
+    network->input = (double **)malloc((DATASIZE + TESTSIZE) * sizeof(double *));
+    for (int i = 0; i < DATASIZE + TESTSIZE; i++)
     {
-        network->Input[i] = (double *)malloc((layerNodes[0] + layerNodes[LAYER + 1]) * sizeof(double));
+        network->input[i] = (double *)malloc((layerNodes[0] + layerNodes[LAYER + 1]) * sizeof(double));
     }
-    GetInput(network->inputFile, network->Input);
+    GetInput(network->inputFile, network->input);
     fclose(network->inputFile);
-
 
     //偏移量矩阵和权重矩阵
     //一共有隐含层层数+1层
@@ -146,14 +164,30 @@ void InitNetwork(BPnetwork *network)
 
 void InitTrain(BPnetwork *network, int numOfData)
 {
-    int i; 
+    int i;
     for (i = 0; i < layerNodes[0]; i++)
     {
-        network->nodes[0][2 * i + 1] = network->nodes[0][2 * i] = network->Input[numOfData][i]; 
+        network->nodes[0][2 * i + 1] = network->nodes[0][2 * i] = network->input[numOfData][i];
     }
-    for(int j = 0; j < layerNodes[LAYER + 1];i++, j ++)
+    for (int j = 0; j < layerNodes[LAYER + 1]; i++, j++)
     {
-        network->errors[j] = -network->Input[numOfData][i];
+        network->errors[j] = -network->input[numOfData][i];
+    }
+}
+
+void InitTest(BPnetwork *network)
+{
+    /*network->testFile = fopen(TESTFILE, "r");
+    if(!network->testFile)
+    {
+        perror("Error in test file");
+        exit(-1);
+    }*/
+    network->checkFile = fopen(CHECKFILE, "w");
+    if (!network->checkFile)
+    {
+        perror("Error in open checkFile");
+        exit(-1);
     }
 }
 
@@ -236,42 +270,55 @@ void NetworkLearn(BPnetwork *network)
             for (int j = 0; j < layerNodes[l]; j++)
             {
                 network->weights[l][i * layerNodes[l] + j] -=
-                    1./network->batchSize * network->learningRate * network->weightDeriv[l][i * layerNodes[l] + j];
+                    (1. / network->batchSize) * network->learningRate * network->weightDeriv[l][i * layerNodes[l] + j];
             }
-            network->biases[l][i] -= 1./network->batchSize * network->learningRate * network->biasesDeriv[l][i];
+            network->biases[l][i] -= (1. / network->batchSize) * network->learningRate * network->biasesDeriv[l][i];
         }
     }
 }
 void test(BPnetwork *network)
 {
-   static double w1[4] = {0.15, 0.20, 0.25, 0.30};
+    static double w1[4] = {0.15, 0.20, 0.25, 0.30};
     *network->weights = w1;
-   static  double w2[4] = {0.40, 0.45, 0.50, 0.55};
+    static double w2[4] = {0.40, 0.45, 0.50, 0.55};
     *(network->weights + 1) = w2;
-   static  double b1[2] = {0.35, 0.35};
+    static double b1[2] = {0.35, 0.35};
     static double b2[2] = {0.60, 0.60};
     *network->biases = b1;
     *(network->biases + 1) = b2;
-   static  double n0[4] = {0.05, 0, 0.10, 0};
+    static double n0[4] = {0.05, 0, 0.10, 0};
     network->nodes[0] = n0;
-   static  double e[2] = {-0.01, -0.99};
+    static double e[2] = {-0.01, -0.99};
     network->errors = e;
 }
-void PrintError(BPnetwork* network)
+void PrintError(BPnetwork *network, FILE *errorFile)
 {
-    fprintf(network->errorFile, "%lf\n",network->e);
+    fprintf(errorFile, "%lf\n", 1./BATCHSIZE * network->e);
 }
-void PrintResult(BPnetwork* network)
+void PrintResult(BPnetwork *network, FILE *resultFile)
 {
-    fprintf(network->resultFile,"\nthe input data is : ");
-    for(int i = 0; i < layerNodes[0]; i ++)
+    fprintf(resultFile, "\nthe input data is : ");
+    for (int i = 0; i < layerNodes[0]; i++)
     {
-        fprintf(network->resultFile,"%.2lf ",network->scaler * network->nodes[0][2 * i]);
+        //fprintf(resultFile, "%.2lf ", network->reMinMax.scaler[i] * network->nodes[0][2 * i] + network->reMinMax.min[i]);
+        fprintf(resultFile, "%.2lf ", network->nodes[0][2 * i + 1]);
     }
-    fprintf(network->resultFile,"\nthe output data is : ");
-    for(int i = 0; i < layerNodes[LAYER + 1]; i ++)
+    fprintf(resultFile, "\nthe output data is : ");
+    for (int i = 0; i < layerNodes[LAYER + 1]; i++)
     {
-        fprintf(network->resultFile,"%.2lf ", network->nodes[LAYER + 1][2* i + 1]);
+        //fprintf(resultFile, "%.2lf ", network->reMinMax.scaler[i + layerNodes[0]] * network->nodes[LAYER + 1][2 * i] + network->reMinMax.min[i + layerNodes[0]]);
+        fprintf(resultFile, "%.2lf ", network->nodes[LAYER + 1][2 * i + 1]);
     }
-    fprintf(network->resultFile,"\nerror = %lf\n", network->e);
+    fprintf(resultFile, "\naccumulate error = %lf\n", network->e);
+}
+void PrintTest(BPnetwork *network, int numOfTest)
+{
+
+    fprintf(network->checkFile, "%d,", numOfTest);
+    for (int i = 0; i < layerNodes[LAYER + 1]; i++)
+    {
+        //fprintf(network->checkFile, "%.2lf,", network->reMinMax.scaler[i + layerNodes[0]] * network->nodes[LAYER + 1][2 * i + 1] + network->reMinMax.min[i + layerNodes[0]]);
+        fprintf(network->checkFile, "%.2lf,", (network->nodes[LAYER + 1][2 * i + 1]) * network->reMinMax.scaler[layerNodes[0] + layerNodes[LAYER + 1] - 1] + network->reMinMax.min[layerNodes[0] + layerNodes[LAYER + 1] - 1]);
+    }
+    fprintf(network->checkFile, "%lf\n", network->errors[0]);
 }
